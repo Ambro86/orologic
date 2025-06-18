@@ -1,0 +1,109 @@
+name: Build Orologic Multi-OS
+
+on:
+  workflow_dispatch: # Permette l'avvio manuale dalla tab Azioni di GitHub
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    name: Build for ${{ matrix.os_name }}
+    runs-on: ${{ matrix.os_runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os_name: Windows
+            os_runner: windows-latest
+            asset_name_suffix: .exe
+          - os_name: Linux
+            os_runner: ubuntu-latest 
+            asset_name_suffix: ""
+          - os_name: macOS-Intel
+            os_runner: macos-13
+            asset_name_suffix: "" 
+            dmg_name: "Orologic-macOS-Intel.dmg"
+          - os_name: macOS-AppleSilicon
+            os_runner: macos-latest
+            asset_name_suffix: "" 
+            dmg_name: "Orologic-macOS-AppleSilicon.dmg"
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Linux audio dependencies
+      if: matrix.os_runner == 'ubuntu-latest'
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends \
+          libasound2-dev portaudio19-dev
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install python-chess python-dateutil pyperclip pyinstaller
+
+    - name: Create GBUtils mock if needed
+      run: |
+        if [ ! -f "GBUtils.py" ]; then
+          cat > GBUtils.py << 'EOF'
+        import sys
+        def dgt(prompt="", kind="s", default=None, **kwargs):
+            return default or input(prompt)
+        def menu(choices=None, d=None, show_only=False, **kwargs):
+            if show_only and d:
+                for k, v in d.items(): print(f"{k}: {v}")
+                return None
+            return input("Escolha: ")
+        def key(prompt="", **kwargs):
+            return input(prompt)
+        def Acusticator(*args, **kwargs):
+            pass
+        EOF
+        fi
+      shell: bash
+
+    - name: Build executable
+      run: |
+        if [[ "${{ matrix.os_name }}" == *"macOS"* ]]; then
+          pyinstaller --windowed \
+            --name Orologic \
+            --hidden-import chess \
+            --hidden-import chess.pgn \
+            --hidden-import chess.engine \
+            --hidden-import pyperclip \
+            --hidden-import dateutil.relativedelta \
+            orologic_pt.py
+        else
+          pyinstaller --onefile --console \
+            --name Orologic \
+            --hidden-import chess \
+            --hidden-import chess.pgn \
+            --hidden-import chess.engine \
+            --hidden-import pyperclip \
+            --hidden-import dateutil.relativedelta \
+            orologic_pt.py
+        fi
+      shell: bash
+
+    - name: Create macOS DMG
+      if: contains(matrix.os_name, 'macOS')
+      run: |
+        mkdir -p dmg_temp
+        cp -R dist/Orologic.app dmg_temp/
+        ln -s /Applications dmg_temp/Applications
+        hdiutil create -volname "Orologic" -srcfolder dmg_temp -ov -format UDZO "${{ matrix.dmg_name }}"
+      shell: bash
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Orologic-${{ matrix.os_name }}
+        path: |
+          ${{ contains(matrix.os_name, 'macOS') && matrix.dmg_name || format('dist/Orologic{0}', matrix.asset_name_suffix) }}
