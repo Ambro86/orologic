@@ -69,17 +69,17 @@ jobs:
         fi
       shell: bash
 
-    - name: Build executable
-      run: |
-        if [[ "${{ matrix.os_name }}" == *"macOS"* ]]; then
-          pyinstaller --windowed \
-            --name Orologic \
-            --hidden-import chess \
-            --hidden-import chess.pgn \
-            --hidden-import chess.engine \
-            --hidden-import pyperclip \
-            --hidden-import dateutil.relativedelta \
-            orologic_pt.py
+      - name: Build executable
+        run: |
+          if [[ "${{ matrix.os_name }}" == *"macOS"* ]]; then
+            pyinstaller --onefile --console \
+              --name Orologic \
+              --hidden-import chess \
+              --hidden-import chess.pgn \
+              --hidden-import chess.engine \
+              --hidden-import pyperclip \
+              --hidden-import dateutil.relativedelta \
+              orologic_pt.py
         else
           pyinstaller --onefile --console \
             --name Orologic \
@@ -99,7 +99,7 @@ jobs:
         if sys.platform.startswith('win'):
             cmd = [r'dist\\Orologic.exe']
         elif sys.platform.startswith('darwin'):
-            cmd = ['dist/Orologic.app/Contents/MacOS/Orologic']
+            cmd = ['./dist/Orologic']
         else:
             cmd = ['./dist/Orologic']
         try:
@@ -118,8 +118,7 @@ jobs:
       if: contains(matrix.os_name, 'macOS')
       run: |
         mkdir -p dmg_temp
-        cp -R dist/Orologic.app dmg_temp/
-        ln -s /Applications dmg_temp/Applications
+        cp dist/Orologic dmg_temp/
         hdiutil create -volname "Orologic" -srcfolder dmg_temp -ov -format UDZO "${{ matrix.dmg_name }}"
       shell: bash
 
