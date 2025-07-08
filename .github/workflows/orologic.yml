@@ -88,8 +88,30 @@ jobs:
             --hidden-import chess.engine \
             --hidden-import pyperclip \
             --hidden-import dateutil.relativedelta \
-            orologic_pt.py
+          orologic_pt.py
         fi
+      shell: bash
+
+    - name: Test executable
+      run: |
+        python - <<'EOF'
+        import subprocess, sys, time
+        if sys.platform.startswith('win'):
+            cmd = [r'dist\\Orologic.exe']
+        elif sys.platform.startswith('darwin'):
+            cmd = ['dist/Orologic.app/Contents/MacOS/Orologic']
+        else:
+            cmd = ['./dist/Orologic']
+        try:
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            time.sleep(3)
+            proc.terminate()
+            proc.wait(timeout=5)
+        except Exception as e:
+            print('Executable failed to run:', e)
+            sys.exit(1)
+        sys.exit(0 if proc.returncode in (0, None, 143) else proc.returncode)
+        EOF
       shell: bash
 
     - name: Create macOS DMG
